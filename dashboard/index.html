@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Bin IoT Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --border-color: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar / Device Info */
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .device-info {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .device-info h3 { margin-bottom: 10px; font-size: 1.1rem; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); }
+        .info-row span.value { color: var(--text-main); font-weight: 500; }
+        .status-badge { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 1000px;
+        }
+
+        /* Top Section: 4 Summary Cards */
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .card-header { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.9rem; }
+        .card-value { font-size: 2rem; font-weight: bold; }
+        .card.paper .card-value { color: var(--accent-green); }
+        .card.plastic .card-value { color: var(--accent-blue); }
+        .card.trash .card-value { color: var(--accent-red); }
+
+        /* Bottom Section: Fills remaining height */
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            flex: 1; /* Magic property that fills the bottom empty space */
+            min-height: 0; /* Ensures inner scrolling works properly */
+        }
+
+        .panel {
+            background-color: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Camera Specifics */
+        .camera-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .live-indicator { display: flex; align-items: center; gap: 8px; color: var(--accent-red); font-size: 0.9rem; font-weight: bold; }
+        .pulse { width: 8px; height: 8px; background: var(--accent-red); border-radius: 50%; animation: pulse 1.5s infinite; }
+
+        .camera-feed-wrapper {
+            background: #000;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* This keeps the actual video feed a perfect square centered in the container */
+        .camera-square {
+            width: 100%;
+            max-height: 100%;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            border: 1px dashed var(--border-color);
+        }
+
+        /* Logs Specifics */
+        .logs-panel { flex: 1; overflow-y: auto; }
+        .logs-content { padding: 20px; }
+        .logs-content h3 { margin-bottom: 15px; font-size: 1rem; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 10px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); font-weight: 500; position: sticky; top: 0; background: var(--bg-card); }
+        td { padding: 10px; border-bottom: 1px solid rgba(51, 65, 85, 0.5); font-size: 0.9rem; }
+        tr:hover { background-color: rgba(255,255,255,0.02); }
+
+        .tag { padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .tag-paper { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .tag-plastic { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .tag-trash { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+
+        /* Right Column (Chart + Controls Stack) */
+        .right-column-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .chart-panel, .controls-panel {
+            flex: 1; /* Splits the right column perfectly in half */
+            padding: 20px;
+        }
+
+        /* Chart */
+        .chart-panel h3 { font-size: 1rem; color: var(--text-muted); margin-bottom: 10px; }
+        .chart-wrapper { flex: 1; position: relative; min-height: 150px; }
+
+        /* Controls */
+        .controls-panel h3 { font-size: 1rem; margin-bottom: 5px;}
+        .controls-grid { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; }
+
+        /* Toggle Switch CSS */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #475569; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent-blue); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <i class="fa-solid fa-recycle"></i> EcoSort AI
+        </div>
+
+        <div class="device-info">
+            <h3><i class="fa-solid fa-microchip"></i> Device Info</h3>
+            <div class="info-row"><span>Status</span> <span class="status-badge">Online</span></div>
+            <div class="info-row"><span>Device ID</span> <span class="value">BIN-809-X</span></div>
+            <div class="info-row"><span>Location</span> <span class="value">Cafeteria Sec A</span></div>
+            <div class="info-row"><span>IP Address</span> <span class="value">192.168.1.104</span></div>
+            <div class="info-row"><span>Uptime</span> <span class="value">14d 2h 45m</span></div>
+        </div>
+
+        <div class="device-info" style="margin-top: auto;">
+            <h3><i class="fa-solid fa-battery-three-quarters"></i> Overall Capacity</h3>
+            <div style="width: 100%; background: var(--border-color); height: 10px; border-radius: 5px; margin-top: 10px;">
+                <div style="width: 65%; background: var(--accent-blue); height: 100%; border-radius: 5px;"></div>
+            </div>
+            <div style="text-align: right; margin-top: 5px; font-size: 0.8rem; color: var(--text-muted);">65% Full</div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        
+        <div class="summary-row">
+            <div class="card">
+                <div class="card-header"><span>Total Items Sorted</span> <i class="fa-solid fa-chart-line"></i></div>
+                <div class="card-value" id="total-count">1,204</div>
+            </div>
+            <div class="card paper">
+                <div class="card-header"><span>Paper & Cardboard</span> <i class="fa-solid fa-box"></i></div>
+                <div class="card-value" id="paper-count">452</div>
+            </div>
+            <div class="card plastic">
+                <div class="card-header"><span>Metal & Plastics</span> <i class="fa-solid fa-bottle-water"></i></div>
+                <div class="card-value" id="plastic-count">518</div>
+            </div>
+            <div class="card trash">
+                <div class="card-header"><span>General Trash</span> <i class="fa-solid fa-trash-can"></i></div>
+                <div class="card-value" id="trash-count">234</div>
+            </div>
+        </div>
+
+        <div class="bottom-grid">
+            
+            <div class="panel">
+                <div class="camera-header">
+                    <span>Object Detection Cam</span>
+                    <div class="live-indicator"><div class="pulse"></div> LIVE</div>
+                </div>
+                <div class="camera-feed-wrapper">
+                    <div class="camera-square">
+                        <i class="fa-solid fa-video-slash" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                        <p>Awaiting Stream</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel logs-panel">
+                <div class="logs-content">
+                    <h3><i class="fa-solid fa-list-ul"></i> Recent Logs</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Conf.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="right-column-stack">
+                
+                <div class="panel chart-panel">
+                    <h3>Distribution Summary</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="panel controls-panel">
+                    <h3><i class="fa-solid fa-sliders"></i> Active Sorting Rules</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted);">Toggle which materials the servos will actively segregate.</p>
+                    
+                    <div class="controls-grid">
+                        <div class="toggle-row">
+                            <span>Paper/Cardboard</span>
+                            <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>Metal/Plastics</span>
+                            <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                        </div>
+                        <div class="toggle-row">
+                            <span>General Trash</span>
+                            <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            try {
+                const ctx = document.getElementById('distributionChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Paper/Cardboard', 'Metal/Plastics', 'General Trash'],
+                        datasets: [{
+                            data: [452, 518, 234], 
+                            backgroundColor: ['#10b981', '#3b82f6', '#ef4444'],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#94a3b8', font: { size: 12, family: 'Segoe UI' }, padding: 15 }
+                            }
+                        },
+                        cutout: '70%'
+                    }
+                });
+            } catch (error) {
+                console.error("Chart.js failed to load.", error);
+            }
+
+            const categories = [
+                { name: 'Crushed Soda Can', tag: 'tag-plastic', label: 'Metal/Plastic' },
+                { name: 'Cardboard Scrap', tag: 'tag-paper', label: 'Paper/Cardboard' },
+                { name: 'Plastic Bottle', tag: 'tag-plastic', label: 'Metal/Plastic' },
+                { name: 'Food Wrapper', tag: 'tag-trash', label: 'General Trash' },
+                { name: 'Coffee Cup', tag: 'tag-paper', label: 'Paper/Cardboard' }
+            ];
+
+            function generateLog() {
+                const tbody = document.getElementById('log-body');
+                if (!tbody) return; 
+                
+                tbody.innerHTML = ''; 
+                
+                for(let i=0; i<8; i++) {
+                    const item = categories[Math.floor(Math.random() * categories.length)];
+                    const confidence = (Math.random() * (99.9 - 85.0) + 85.0).toFixed(1);
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${item.name}</strong> <br> <span class="tag ${item.tag}" style="margin-top: 5px; display: inline-block;">${item.label}</span></td>
+                        <td>${confidence}%</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            }
+
+            generateLog();
+            setInterval(generateLog, 8000);
+        });
+    </script>
+</body>
+</html>
